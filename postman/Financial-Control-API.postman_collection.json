@@ -1,0 +1,415 @@
+{
+  "info": {
+    "name": "Financial Control API",
+    "description": "Importe também o environment `Local.postman_environment.json`.\n\nOrdem sugerida:\n1. Health\n2. Auth → Login (grava accessToken, refreshToken e usuarioId)\n3. Demais rotas (Bearer automático)\n4. Auth → Refresh a cada 5 minutos\n\nSeed: `pedro.missaglia@gmail.com` / `123456` (id 1) e `John@fincontrol.com` / `fincontrol` (id 2).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "usuarioId", "value": "1" },
+    { "key": "transacaoId", "value": "1" },
+    { "key": "profileId", "value": "1" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('tokens presentes', () => {",
+                  "  pm.expect(json.accessToken).to.be.a('string');",
+                  "  pm.expect(json.refreshToken).to.be.a('string');",
+                  "  pm.expect(json.expiresIn).to.eql(300);",
+                  "});",
+                  "pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "if (json.usuario && json.usuario.id) {",
+                  "  pm.collectionVariables.set('usuarioId', json.usuario.id);",
+                  "  pm.collectionVariables.set('profileId', json.usuario.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"pedro.missaglia@gmail.com\",\n  \"senha\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Público. Grava accessToken (5 min), refreshToken e usuarioId."
+          }
+        },
+        {
+          "name": "POST login (credenciais inválidas)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status 401', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"pedro.missaglia@gmail.com\",\n  \"senha\": \"errada\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "POST refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', json.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/refresh",
+            "description": "Público. Rotaciona o refresh: o token antigo deixa de valer. Rode a cada 5 minutos."
+          }
+        },
+        {
+          "name": "POST logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/logout",
+            "description": "Bearer obrigatório. Invalida o refresh atual (ou todos, se o body vier vazio)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Usuarios",
+      "item": [
+        {
+          "name": "GET usuarios",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('lista sem senha', () => {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "  json.forEach((u) => pm.expect(u).to.not.have.property('senha'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/usuarios",
+            "description": "Bearer. Não retorna senha."
+          }
+        },
+        {
+          "name": "POST usuarios (cadastro)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Maria Silva\",\n  \"email\": \"maria@fincontrol.com\",\n  \"senha\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/usuarios",
+            "description": "Público. E-mail único. 409 se já existir."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transacoes",
+      "item": [
+        {
+          "name": "GET transacoes (sem token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status 401', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/transacoes?usuarioId={{usuarioId}}"
+          }
+        },
+        {
+          "name": "GET transacoes por usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('envelope da lista completa', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('items').that.is.an('array');",
+                  "  pm.expect(json).to.have.property('total');",
+                  "  pm.expect(json).to.have.property('page', 1);",
+                  "  pm.expect(json).to.have.property('totalUnfiltered');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transacoes?usuarioId={{usuarioId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["transacoes"],
+              "query": [{ "key": "usuarioId", "value": "{{usuarioId}}" }]
+            }
+          }
+        },
+        {
+          "name": "GET transacoes paginado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('envelope paginado', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('items').that.is.an('array');",
+                  "  pm.expect(json.items.length).to.be.at.most(8);",
+                  "  pm.expect(json).to.have.property('page', 1);",
+                  "  pm.expect(json).to.have.property('pageSize', 8);",
+                  "  pm.expect(json).to.have.property('total');",
+                  "  pm.expect(json).to.have.property('totalUnfiltered');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transacoes?usuarioId={{usuarioId}}&page=1&pageSize=8",
+              "host": ["{{baseUrl}}"],
+              "path": ["transacoes"],
+              "query": [
+                { "key": "usuarioId", "value": "{{usuarioId}}" },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "8" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET transacoes paginado com filtros",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transacoes?usuarioId={{usuarioId}}&page=1&pageSize=8&tipo=pagamento&busca=",
+              "host": ["{{baseUrl}}"],
+              "path": ["transacoes"],
+              "query": [
+                { "key": "usuarioId", "value": "{{usuarioId}}" },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "8" },
+                { "key": "tipo", "value": "pagamento" },
+                { "key": "busca", "value": "" },
+                { "key": "categoria", "value": "" },
+                { "key": "dataInicio", "value": "" },
+                { "key": "dataFim", "value": "" },
+                { "key": "valorMin", "value": "" },
+                { "key": "valorMax", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET transacao por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/transacoes/{{transacaoId}}"
+          }
+        },
+        {
+          "name": "POST transacao",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.id) pm.collectionVariables.set('transacaoId', json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"tipo\": \"pagamento\",\n  \"valor\": 89.9,\n  \"data\": \"2026-08-17\",\n  \"hora\": \"14:32:01\",\n  \"descricao\": \"Internet\",\n  \"categoria\": \"servicos\",\n  \"anexo\": null\n}"
+            },
+            "url": "{{baseUrl}}/transacoes",
+            "description": "tipo: deposito | transferencia | saque | pagamento\ncategoria: salario | freelance | moradia | alimentacao | transporte | saude | educacao | lazer | servicos | transferencias | outros\nhora: HH:mm:ss obrigatória"
+          }
+        },
+        {
+          "name": "POST transacao sem hora (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"tipo\": \"pagamento\",\n  \"valor\": 89.9,\n  \"data\": \"2026-08-17\",\n  \"descricao\": \"Internet\",\n  \"categoria\": \"servicos\",\n  \"anexo\": null\n}"
+            },
+            "url": "{{baseUrl}}/transacoes"
+          }
+        },
+        {
+          "name": "PUT transacao",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"tipo\": \"pagamento\",\n  \"valor\": 120,\n  \"data\": \"2026-08-17\",\n  \"hora\": \"14:32:01\",\n  \"descricao\": \"Internet (ajustado)\",\n  \"categoria\": \"servicos\",\n  \"anexo\": null\n}"
+            },
+            "url": "{{baseUrl}}/transacoes/{{transacaoId}}"
+          }
+        },
+        {
+          "name": "DELETE transacao",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/transacoes/{{transacaoId}}",
+            "description": "Cuidado: apaga a transação em {{transacaoId}}. Rode o POST antes para não apagar seed."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profiles",
+      "item": [
+        {
+          "name": "GET profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/profiles/{{profileId}}",
+            "description": "id do profile = usuarioId (seed: 1)."
+          }
+        },
+        {
+          "name": "PUT profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{profileId}}\",\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"theme\": \"cyan\",\n  \"themeMode\": \"dark\",\n  \"metaEconomia\": 1000,\n  \"alertaGastos\": 2500,\n  \"transacoesPageSize\": 10,\n  \"extratoLimite\": 10,\n  \"transacoesFiltros\": {\n    \"busca\": \"\",\n    \"tipo\": \"\",\n    \"categoria\": \"\",\n    \"dataInicio\": \"\",\n    \"dataFim\": \"\",\n    \"valorMin\": null,\n    \"valorMax\": null\n  }\n}"
+            },
+            "url": "{{baseUrl}}/profiles/{{profileId}}"
+          }
+        },
+        {
+          "name": "POST profile",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"novo-usuario-id\",\n  \"usuarioId\": \"novo-usuario-id\",\n  \"theme\": \"cyan\",\n  \"themeMode\": \"light\",\n  \"metaEconomia\": 800,\n  \"alertaGastos\": 2500,\n  \"transacoesPageSize\": 8,\n  \"extratoLimite\": 10,\n  \"transacoesFiltros\": {\n    \"busca\": \"\",\n    \"tipo\": \"\",\n    \"categoria\": \"\",\n    \"dataInicio\": \"\",\n    \"dataFim\": \"\",\n    \"valorMin\": null,\n    \"valorMax\": null\n  },\n  \"widgets\": [],\n  \"layoutRows\": [],\n  \"layoutGroups\": []\n}"
+            },
+            "url": "{{baseUrl}}/profiles",
+            "description": "Use depois de criar um usuário novo. id e usuarioId devem ser iguais."
+          }
+        }
+      ]
+    }
+  ]
+}
