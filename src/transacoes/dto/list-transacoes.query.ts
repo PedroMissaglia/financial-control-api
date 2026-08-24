@@ -8,6 +8,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { parseUsuarioIdsQuery } from '../../common/usuario-ids';
 import { FORMAS_PAGAMENTO, TIPOS_TRANSACAO } from '../transacao.constants';
 import type { FormaPagamento, TipoTransacao } from '../transacao.constants';
 
@@ -26,6 +27,11 @@ export class ListTransacoesQuery {
   @IsOptional()
   @IsString()
   usuarioId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => parseUsuarioIdsQuery(value))
+  @IsString({ each: true })
+  usuarioIds?: string[];
 
   @IsOptional()
   @Transform(toOptionalNumber)

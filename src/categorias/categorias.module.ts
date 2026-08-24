@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ContasConjuntasModule } from '../contas-conjuntas/contas-conjuntas.module';
 import {
   Transacao,
   TransacaoSchema,
@@ -14,6 +15,7 @@ import { Categoria, CategoriaSchema } from './schemas/categoria.schema';
       { name: Categoria.name, schema: CategoriaSchema },
       { name: Transacao.name, schema: TransacaoSchema },
     ]),
+    ContasConjuntasModule,
   ],
   controllers: [CategoriasController],
   providers: [CategoriasService],

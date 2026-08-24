@@ -10,6 +10,7 @@ import { Model } from 'mongoose';
 import type { AuthUser } from '../auth/auth.types';
 import { CategoriasService } from '../categorias/categorias.service';
 import { createId } from '../common/ids';
+import { ContasConjuntasService } from '../contas-conjuntas/contas-conjuntas.service';
 import { TransacoesService } from '../transacoes/transacoes.service';
 import type { FormaPagamento } from '../transacoes/transacao.constants';
 import { CreateGastoMensalDto } from './dto/create-gasto-mensal.dto';
@@ -46,24 +47,29 @@ export class GastosMensaisService {
     private readonly pagamentoModel: Model<GastoMensalPagamentoDocument>,
     private readonly transacoesService: TransacoesService,
     private readonly categoriasService: CategoriasService,
+    private readonly contasConjuntasService: ContasConjuntasService,
   ) {}
 
   async findAll(
-    usuarioId: string,
+    usuarioIds: string[],
     competencia?: string,
   ): Promise<GastoMensalListItem[]> {
+    const ids = usuarioIds.filter(Boolean);
     const mes = competencia ?? competenciaAtualUtc();
-    const templates = await this.gastoModel
-      .find({ usuarioId })
-      .sort({ diaVencimento: 1, titulo: 1 })
-      .exec();
-
-    const ids = templates.map((item) => item.id);
-    const pagamentos =
+    const templates =
       ids.length === 0
         ? []
+        : await this.gastoModel
+            .find({ usuarioId: { $in: ids } })
+            .sort({ diaVencimento: 1, titulo: 1 })
+            .exec();
+
+    const gastoIds = templates.map((item) => item.id);
+    const pagamentos =
+      gastoIds.length === 0
+        ? []
         : await this.pagamentoModel
-            .find({ usuarioId, competencia: mes, gastoId: { $in: ids } })
+            .find({ usuarioId: { $in: ids }, competencia: mes, gastoId: { $in: gastoIds } })
             .exec();
 
     const porGasto = new Map(
@@ -91,7 +97,8 @@ export class GastosMensaisService {
     return result;
   }
 
-  async create(dto: CreateGastoMensalDto): Promise<unknown> {
+  async create(dto: CreateGastoMensalDto, user: AuthUser): Promise<unknown> {
+    await this.contasConjuntasService.assertCanAccess(user.id, dto.usuarioId);
     const categoria = dto.categoria?.trim() || CATEGORIA_PADRAO;
     await this.assertCategoriaValida(dto.usuarioId, categoria);
 
@@ -210,7 +217,7 @@ export class GastosMensaisService {
     if (!doc) {
       throw new NotFoundException('Gasto mensal não encontrado');
     }
-    if (doc.usuarioId !== user.id) {
+    if (!(await this.contasConjuntasService.canAccess(user.id, doc.usuarioId))) {
       throw new ForbiddenException('Você não pode alterar este gasto mensal');
     }
     return doc;

@@ -4,13 +4,14 @@ import { Model } from 'mongoose';
 import { AnexosService } from '../anexos/anexos.service';
 import { CategoriasService } from '../categorias/categorias.service';
 import { createId } from '../common/ids';
+import { resolveRequestedUsuarioIds } from '../common/usuario-ids';
 import { CreateTransacaoDto } from './dto/create-transacao.dto';
 import { ListTransacoesQuery } from './dto/list-transacoes.query';
 import { Transacao, TransacaoDocument } from './schemas/transacao.schema';
 import type { FormaPagamento, TipoTransacao } from './transacao.constants';
 
 type TransacaoFiltro = {
-  usuarioId?: string;
+  usuarioId?: string | { $in: string[] };
   tipo?: TipoTransacao;
   categoria?: string;
   formaPagamento?: FormaPagamento;
@@ -42,9 +43,13 @@ export class TransacoesService {
 
   async findAll(query: ListTransacoesQuery): Promise<TransacoesPage> {
     const filtro = this.montarFiltro(query);
-    const usuarioFiltro: TransacaoFiltro = query.usuarioId
-      ? { usuarioId: query.usuarioId }
-      : {};
+    const ids = resolveRequestedUsuarioIds(query.usuarioId, query.usuarioIds);
+    const usuarioFiltro: TransacaoFiltro =
+      ids.length === 1
+        ? { usuarioId: ids[0] }
+        : ids.length > 1
+          ? { usuarioId: { $in: ids } }
+          : {};
     const paginated = query.pageSize != null;
     const page = paginated ? (query.page ?? 1) : 1;
     const pageSize = paginated ? Math.min(query.pageSize ?? 1, 100) : 0;
@@ -188,8 +193,11 @@ export class TransacoesService {
   private montarFiltro(query: ListTransacoesQuery): TransacaoFiltro {
     const filtro: TransacaoFiltro = {};
 
-    if (query.usuarioId) {
-      filtro.usuarioId = query.usuarioId;
+    const ids = resolveRequestedUsuarioIds(query.usuarioId, query.usuarioIds);
+    if (ids.length === 1) {
+      filtro.usuarioId = ids[0];
+    } else if (ids.length > 1) {
+      filtro.usuarioId = { $in: ids };
     }
 
     const busca = query.busca?.trim();

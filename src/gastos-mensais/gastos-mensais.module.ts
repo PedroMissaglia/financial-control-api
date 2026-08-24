@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CategoriasModule } from '../categorias/categorias.module';
+import { ContasConjuntasModule } from '../contas-conjuntas/contas-conjuntas.module';
 import { TransacoesModule } from '../transacoes/transacoes.module';
 import { GastosMensaisController } from './gastos-mensais.controller';
 import { GastosMensaisService } from './gastos-mensais.service';
@@ -18,6 +19,7 @@ import { GastoMensal, GastoMensalSchema } from './schemas/gasto-mensal.schema';
     ]),
     TransacoesModule,
     CategoriasModule,
+    ContasConjuntasModule,
   ],
   controllers: [GastosMensaisController],
   providers: [GastosMensaisService],

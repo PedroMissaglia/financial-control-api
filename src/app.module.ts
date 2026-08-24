@@ -5,6 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AnexosModule } from './anexos/anexos.module';
 import { AuthModule } from './auth/auth.module';
 import { CategoriasModule } from './categorias/categorias.module';
+import { ContasConjuntasModule } from './contas-conjuntas/contas-conjuntas.module';
 import { GastosMensaisModule } from './gastos-mensais/gastos-mensais.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { ProfilesModule } from './profiles/profiles.module';
@@ -24,6 +25,7 @@ import { AppController } from './app.controller';
     }),
     AuthModule,
     UsuariosModule,
+    ContasConjuntasModule,
     TransacoesModule,
     CategoriasModule,
     AnexosModule,

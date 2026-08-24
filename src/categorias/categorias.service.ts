@@ -9,6 +9,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type { AuthUser } from '../auth/auth.types';
 import { createId } from '../common/ids';
+import { ContasConjuntasService } from '../contas-conjuntas/contas-conjuntas.service';
 import {
   Transacao,
   TransacaoDocument,
@@ -31,6 +32,7 @@ export class CategoriasService {
     private readonly categoriaModel: Model<CategoriaDocument>,
     @InjectModel(Transacao.name)
     private readonly transacaoModel: Model<TransacaoDocument>,
+    private readonly contasConjuntasService: ContasConjuntasService,
   ) {}
 
   isSistemaId(id: string): boolean {
@@ -45,8 +47,12 @@ export class CategoriasService {
     return custom != null;
   }
 
-  async findAll(usuarioId: string): Promise<CategoriaDto[]> {
-    const customs = await this.categoriaModel.find({ usuarioId }).exec();
+  async findAll(usuarioIds: string[]): Promise<CategoriaDto[]> {
+    const ids = usuarioIds.filter(Boolean);
+    const customs =
+      ids.length === 0
+        ? []
+        : await this.categoriaModel.find({ usuarioId: { $in: ids } }).exec();
     const sistema: CategoriaDto[] = CATEGORIAS_TRANSACAO.map((id) => ({
       id,
       nome: CATEGORIAS_SISTEMA[id],
@@ -56,11 +62,13 @@ export class CategoriasService {
       id: item.id,
       nome: item.nome,
       sistema: false,
+      usuarioId: item.usuarioId,
     }));
     return [...sistema, ...proprias];
   }
 
-  async create(dto: CreateCategoriaDto): Promise<CategoriaDto> {
+  async create(dto: CreateCategoriaDto, user: AuthUser): Promise<CategoriaDto> {
+    await this.contasConjuntasService.assertCanAccess(user.id, dto.usuarioId);
     const nome = dto.nome.trim();
     this.assertNomeLivreDeSistema(nome);
     await this.assertNomeUnico(dto.usuarioId, nome);
@@ -71,7 +79,7 @@ export class CategoriasService {
       nome,
     });
 
-    return { id: criada.id, nome: criada.nome, sistema: false };
+    return { id: criada.id, nome: criada.nome, sistema: false, usuarioId: criada.usuarioId };
   }
 
   async update(
@@ -86,7 +94,7 @@ export class CategoriasService {
 
     doc.nome = nome;
     await doc.save();
-    return { id: doc.id, nome: doc.nome, sistema: false };
+    return { id: doc.id, nome: doc.nome, sistema: false, usuarioId: doc.usuarioId };
   }
 
   async remove(id: string, user: AuthUser): Promise<Record<string, never>> {
@@ -115,7 +123,7 @@ export class CategoriasService {
     if (!doc) {
       throw new NotFoundException('Categoria não encontrada');
     }
-    if (doc.usuarioId !== user.id) {
+    if (!(await this.contasConjuntasService.canAccess(user.id, doc.usuarioId))) {
       throw new ForbiddenException('Você não pode alterar esta categoria');
     }
     return doc;

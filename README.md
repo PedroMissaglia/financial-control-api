@@ -35,6 +35,23 @@ Rotas protegidas: `Authorization: Bearer <accessToken>`.
 
 Usuários de seed: `pedro.missaglia@gmail.com` / `123456` e `John@fincontrol.com` / `fincontrol`.
 
-## Deploy na AWS
+## Conta conjunta
 
-Guia do zero (conta AWS, Docker, ECR, App Runner, Atlas, Postman): [docs/DEPLOY-AWS.md](docs/DEPLOY-AWS.md).
+Contrato completo: [docs/CONTA_CONJUNTA.md](docs/CONTA_CONJUNTA.md).
+
+O front (Fin Control) já consome estes endpoints e, enquanto a rota não existir, usa um mock local só para protótipo de UI.
+
+- `GET /contas-conjuntas`
+- `POST /contas-conjuntas/convites` `{ email }`
+- `POST /contas-conjuntas/convites/:id/aceitar|recusar`
+- `DELETE /contas-conjuntas/convites/:id`
+- `DELETE /contas-conjuntas`
+
+Listagens de transações, categorias e gastos aceitam `usuarioIds` (CSV) para a visão conjunta. O JWT pode operar o `usuarioId` do cônjuge quando a parceria está ativa. Perfil do cônjuge: **GET permitido**, **PUT bloqueado**.
+
+### Checklist de validação (API)
+
+1. Usuário A convida B por e-mail cadastrado → B aceita.
+2. A lista `usuarioIds=A,B` e vê/edita transações de B.
+3. B lê `GET /profiles/A` (meta/alerta); `PUT /profiles/A` retorna 403.
+4. Encerrar parceria remove o acesso cruzado.
