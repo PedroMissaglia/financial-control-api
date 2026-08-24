@@ -1,12 +1,68 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
+  IsIn,
   IsNumber,
   IsObject,
   IsOptional,
   IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
+
+export class DashboardWidgetDto {
+  @IsString()
+  id!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  visible?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  cols?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  colStart?: number;
+}
+
+export class LayoutRowDto {
+  @IsIn(['full', 'group'])
+  type!: 'full' | 'group';
+
+  @IsOptional()
+  @IsString()
+  widgetId?: string;
+
+  @IsOptional()
+  @IsString()
+  groupId?: string;
+}
+
+export class LayoutGroupDto {
+  @IsString()
+  id!: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  left!: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  center!: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  right!: string[];
+}
 
 export class CreateProfileDto {
   @IsString()
@@ -51,13 +107,19 @@ export class CreateProfileDto {
 
   @IsOptional()
   @IsArray()
-  widgets?: unknown[];
+  @ValidateNested({ each: true })
+  @Type(() => DashboardWidgetDto)
+  widgets?: DashboardWidgetDto[];
 
   @IsOptional()
   @IsArray()
-  layoutRows?: unknown[];
+  @ValidateNested({ each: true })
+  @Type(() => LayoutRowDto)
+  layoutRows?: LayoutRowDto[];
 
   @IsOptional()
   @IsArray()
-  layoutGroups?: unknown[];
+  @ValidateNested({ each: true })
+  @Type(() => LayoutGroupDto)
+  layoutGroups?: LayoutGroupDto[];
 }
