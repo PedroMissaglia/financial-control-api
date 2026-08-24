@@ -10,14 +10,8 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import {
-  CATEGORIAS_TRANSACAO,
-  TIPOS_TRANSACAO,
-} from '../transacao.constants';
-import type {
-  CategoriaTransacao,
-  TipoTransacao,
-} from '../transacao.constants';
+import { FORMAS_PAGAMENTO, TIPOS_TRANSACAO } from '../transacao.constants';
+import type { FormaPagamento, TipoTransacao } from '../transacao.constants';
 
 export class AnexoDto {
   @IsString()
@@ -55,8 +49,13 @@ export class CreateTransacaoDto {
   @MinLength(1)
   descricao!: string;
 
-  @IsIn(CATEGORIAS_TRANSACAO)
-  categoria!: CategoriaTransacao;
+  @IsString()
+  @MinLength(1)
+  categoria!: string;
+
+  @IsOptional()
+  @IsIn(FORMAS_PAGAMENTO)
+  formaPagamento?: FormaPagamento | null;
 
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @ValidateNested()

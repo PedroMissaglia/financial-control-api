@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import { applyJsonTransform } from '../../common/mongoose-to-json';
-import type { CategoriaTransacao, TipoTransacao } from '../transacao.constants';
+import type { FormaPagamento, TipoTransacao } from '../transacao.constants';
 
 export type TransacaoDocument = HydratedDocument<Transacao>;
 
@@ -29,21 +29,21 @@ export class Transacao {
   descricao!: string;
 
   @Prop({ required: true, type: String })
-  categoria!: CategoriaTransacao;
+  categoria!: string;
 
-  @Prop({
-    type: {
-      nome: { type: String, required: true },
-      mimeType: { type: String, required: true },
-      dataUrl: { type: String, required: true },
-    },
-    default: null,
-  })
-  anexo!: { nome: string; mimeType: string; dataUrl: string } | null;
+  @Prop({ type: String, default: null })
+  formaPagamento!: FormaPagamento | null;
+
+  @Prop({ type: String, default: null })
+  anexoId!: string | null;
 }
 
 export const TransacaoSchema = SchemaFactory.createForClass(Transacao);
 TransacaoSchema.index({ usuarioId: 1, data: -1, hora: -1 });
 applyJsonTransform(TransacaoSchema, [], (ret) => {
   if (!ret.hora) ret.hora = '00:00:00';
+  if (ret.formaPagamento == null) ret.formaPagamento = null;
+  if (ret.anexoId == null) ret.anexoId = null;
+  delete ret.anexo;
+  delete ret.dataUrl;
 });

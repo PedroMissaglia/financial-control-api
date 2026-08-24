@@ -1,0 +1,147 @@
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import type { AuthUser } from '../auth/auth.types';
+import { createId } from '../common/ids';
+import {
+  Transacao,
+  TransacaoDocument,
+} from '../transacoes/schemas/transacao.schema';
+import {
+  CATEGORIAS_SISTEMA,
+  CATEGORIAS_TRANSACAO,
+} from '../transacoes/transacao.constants';
+import type { CategoriaDto } from './dto/categoria.dto';
+import { CreateCategoriaDto } from './dto/create-categoria.dto';
+import { UpdateCategoriaDto } from './dto/update-categoria.dto';
+import { Categoria, CategoriaDocument } from './schemas/categoria.schema';
+
+const CATEGORIA_OUTROS = 'outros';
+
+@Injectable()
+export class CategoriasService {
+  constructor(
+    @InjectModel(Categoria.name)
+    private readonly categoriaModel: Model<CategoriaDocument>,
+    @InjectModel(Transacao.name)
+    private readonly transacaoModel: Model<TransacaoDocument>,
+  ) {}
+
+  isSistemaId(id: string): boolean {
+    return (CATEGORIAS_TRANSACAO as readonly string[]).includes(id);
+  }
+
+  async isValidForUsuario(usuarioId: string, categoria: string): Promise<boolean> {
+    if (this.isSistemaId(categoria)) return true;
+    const custom = await this.categoriaModel
+      .findOne({ id: categoria, usuarioId })
+      .exec();
+    return custom != null;
+  }
+
+  async findAll(usuarioId: string): Promise<CategoriaDto[]> {
+    const customs = await this.categoriaModel.find({ usuarioId }).exec();
+    const sistema: CategoriaDto[] = CATEGORIAS_TRANSACAO.map((id) => ({
+      id,
+      nome: CATEGORIAS_SISTEMA[id],
+      sistema: true,
+    }));
+    const proprias: CategoriaDto[] = customs.map((item) => ({
+      id: item.id,
+      nome: item.nome,
+      sistema: false,
+    }));
+    return [...sistema, ...proprias];
+  }
+
+  async create(dto: CreateCategoriaDto): Promise<CategoriaDto> {
+    const nome = dto.nome.trim();
+    this.assertNomeLivreDeSistema(nome);
+    await this.assertNomeUnico(dto.usuarioId, nome);
+
+    const criada = await this.categoriaModel.create({
+      id: createId(),
+      usuarioId: dto.usuarioId,
+      nome,
+    });
+
+    return { id: criada.id, nome: criada.nome, sistema: false };
+  }
+
+  async update(
+    id: string,
+    dto: UpdateCategoriaDto,
+    user: AuthUser,
+  ): Promise<CategoriaDto> {
+    const doc = await this.getCustomOwned(id, user);
+    const nome = dto.nome.trim();
+    this.assertNomeLivreDeSistema(nome);
+    await this.assertNomeUnico(doc.usuarioId, nome, id);
+
+    doc.nome = nome;
+    await doc.save();
+    return { id: doc.id, nome: doc.nome, sistema: false };
+  }
+
+  async remove(id: string, user: AuthUser): Promise<Record<string, never>> {
+    const doc = await this.getCustomOwned(id, user);
+
+    await this.transacaoModel
+      .updateMany(
+        { usuarioId: doc.usuarioId, categoria: id },
+        { $set: { categoria: CATEGORIA_OUTROS } },
+      )
+      .exec();
+
+    await this.categoriaModel.deleteOne({ id }).exec();
+    return {};
+  }
+
+  private async getCustomOwned(
+    id: string,
+    user: AuthUser,
+  ): Promise<CategoriaDocument> {
+    if (this.isSistemaId(id)) {
+      throw new ForbiddenException('Não é permitido alterar categorias de sistema');
+    }
+
+    const doc = await this.categoriaModel.findOne({ id }).exec();
+    if (!doc) {
+      throw new NotFoundException('Categoria não encontrada');
+    }
+    if (doc.usuarioId !== user.id) {
+      throw new ForbiddenException('Você não pode alterar esta categoria');
+    }
+    return doc;
+  }
+
+  private assertNomeLivreDeSistema(nome: string): void {
+    const normalized = nome.toLowerCase();
+    for (const slug of CATEGORIAS_TRANSACAO) {
+      if (slug === normalized || CATEGORIAS_SISTEMA[slug].toLowerCase() === normalized) {
+        throw new BadRequestException('Nome colide com categoria de sistema');
+      }
+    }
+  }
+
+  private async assertNomeUnico(
+    usuarioId: string,
+    nome: string,
+    exceptId?: string,
+  ): Promise<void> {
+    const existentes = await this.categoriaModel.find({ usuarioId }).exec();
+    const normalized = nome.toLowerCase();
+    const duplicada = existentes.some(
+      (item) => item.id !== exceptId && item.nome.trim().toLowerCase() === normalized,
+    );
+    if (duplicada) {
+      throw new ConflictException('Já existe uma categoria com este nome');
+    }
+  }
+}

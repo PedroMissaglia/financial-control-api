@@ -10,6 +10,8 @@
     { "key": "refreshToken", "value": "" },
     { "key": "usuarioId", "value": "1" },
     { "key": "transacaoId", "value": "1" },
+    { "key": "categoriaId", "value": "" },
+    { "key": "anexoId", "value": "" },
     { "key": "profileId", "value": "1" }
   ],
   "auth": {
@@ -216,6 +218,12 @@
                   "  pm.expect(json).to.have.property('total');",
                   "  pm.expect(json).to.have.property('page', 1);",
                   "  pm.expect(json).to.have.property('totalUnfiltered');",
+                  "  json.items.forEach((item) => {",
+                  "    pm.expect(item).to.not.have.property('anexo');",
+                  "    pm.expect(item).to.not.have.property('dataUrl');",
+                  "    pm.expect(item).to.have.property('anexoId');",
+                  "    pm.expect(item).to.have.property('formaPagamento');",
+                  "  });",
                   "});"
                 ]
               }
@@ -285,6 +293,7 @@
                 { "key": "tipo", "value": "pagamento" },
                 { "key": "busca", "value": "" },
                 { "key": "categoria", "value": "" },
+                { "key": "formaPagamento", "value": "" },
                 { "key": "dataInicio", "value": "" },
                 { "key": "dataFim", "value": "" },
                 { "key": "valorMin", "value": "" },
@@ -312,6 +321,7 @@
                   "if (pm.response.code === 201 || pm.response.code === 200) {",
                   "  const json = pm.response.json();",
                   "  if (json.id) pm.collectionVariables.set('transacaoId', json.id);",
+                  "  if (json.anexoId) pm.collectionVariables.set('anexoId', json.anexoId);",
                   "}"
                 ]
               }
@@ -322,10 +332,10 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"tipo\": \"pagamento\",\n  \"valor\": 89.9,\n  \"data\": \"2026-08-17\",\n  \"hora\": \"14:32:01\",\n  \"descricao\": \"Internet\",\n  \"categoria\": \"servicos\",\n  \"anexo\": null\n}"
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"tipo\": \"pagamento\",\n  \"valor\": 89.9,\n  \"data\": \"2026-08-17\",\n  \"hora\": \"14:32:01\",\n  \"descricao\": \"Internet\",\n  \"categoria\": \"servicos\",\n  \"formaPagamento\": \"vr_va\",\n  \"anexo\": null\n}"
             },
             "url": "{{baseUrl}}/transacoes",
-            "description": "tipo: deposito | transferencia | saque | pagamento\ncategoria: salario | freelance | moradia | alimentacao | transporte | saude | educacao | lazer | servicos | transferencias | outros\nhora: HH:mm:ss obrigatória"
+            "description": "tipo: deposito | transferencia | saque | pagamento\ncategoria: slug de sistema ou id custom\nformaPagamento: credito | debito | pix | vr_va | null\nhora: HH:mm:ss obrigatória\nGET devolve anexoId, nunca o blob"
           }
         },
         {
@@ -356,9 +366,88 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"tipo\": \"pagamento\",\n  \"valor\": 120,\n  \"data\": \"2026-08-17\",\n  \"hora\": \"14:32:01\",\n  \"descricao\": \"Internet (ajustado)\",\n  \"categoria\": \"servicos\",\n  \"anexo\": null\n}"
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"tipo\": \"pagamento\",\n  \"valor\": 120,\n  \"data\": \"2026-08-17\",\n  \"hora\": \"14:32:01\",\n  \"descricao\": \"Internet (ajustado)\",\n  \"categoria\": \"servicos\",\n  \"formaPagamento\": \"debito\"\n}"
             },
-            "url": "{{baseUrl}}/transacoes/{{transacaoId}}"
+            "url": "{{baseUrl}}/transacoes/{{transacaoId}}",
+            "description": "Omitir anexo não altera anexoId. anexo: null apaga o blob."
+          }
+        },
+        {
+          "name": "POST transacao com anexo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.id) pm.collectionVariables.set('transacaoId', json.id);",
+                  "  if (json.anexoId) pm.collectionVariables.set('anexoId', json.anexoId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"tipo\": \"pagamento\",\n  \"valor\": 12.5,\n  \"data\": \"2026-08-17\",\n  \"hora\": \"10:00:00\",\n  \"descricao\": \"Comprovante\",\n  \"categoria\": \"outros\",\n  \"formaPagamento\": \"pix\",\n  \"anexo\": {\n    \"nome\": \"comprovante.txt\",\n    \"mimeType\": \"text/plain\",\n    \"dataUrl\": \"data:text/plain;base64,ZmluY29udHJvbA==\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/transacoes",
+            "description": "Grava o blob em /anexos e devolve anexoId."
+          }
+        },
+        {
+          "name": "POST transacao categoria invalida (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"tipo\": \"pagamento\",\n  \"valor\": 10,\n  \"data\": \"2026-08-17\",\n  \"hora\": \"10:00:00\",\n  \"descricao\": \"Invalida\",\n  \"categoria\": \"nao-existe\"\n}"
+            },
+            "url": "{{baseUrl}}/transacoes"
+          }
+        },
+        {
+          "name": "PUT transacao anexo null",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"tipo\": \"pagamento\",\n  \"valor\": 12.5,\n  \"data\": \"2026-08-17\",\n  \"hora\": \"10:00:00\",\n  \"descricao\": \"Sem comprovante\",\n  \"categoria\": \"outros\",\n  \"formaPagamento\": \"pix\",\n  \"anexo\": null\n}"
+            },
+            "url": "{{baseUrl}}/transacoes/{{transacaoId}}",
+            "description": "Remove o doc em anexos e zera anexoId."
+          }
+        },
+        {
+          "name": "GET transacoes por formaPagamento",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transacoes?usuarioId={{usuarioId}}&formaPagamento=vr_va",
+              "host": ["{{baseUrl}}"],
+              "path": ["transacoes"],
+              "query": [
+                { "key": "usuarioId", "value": "{{usuarioId}}" },
+                { "key": "formaPagamento", "value": "vr_va" }
+              ]
+            }
           }
         },
         {
@@ -368,6 +457,117 @@
             "header": [],
             "url": "{{baseUrl}}/transacoes/{{transacaoId}}",
             "description": "Cuidado: apaga a transação em {{transacaoId}}. Rode o POST antes para não apagar seed."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categorias",
+      "item": [
+        {
+          "name": "GET categorias",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('11 de sistema', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.filter((c) => c.sistema).length).to.eql(11);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/categorias?usuarioId={{usuarioId}}",
+            "description": "usuarioId obrigatório. 11 sistema + customs do usuário."
+          }
+        },
+        {
+          "name": "POST categoria",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.id) pm.collectionVariables.set('categoriaId', json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"nome\": \"Pet\"\n}"
+            },
+            "url": "{{baseUrl}}/categorias"
+          }
+        },
+        {
+          "name": "PUT categoria",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Pet shop\"\n}"
+            },
+            "url": "{{baseUrl}}/categorias/{{categoriaId}}"
+          }
+        },
+        {
+          "name": "PUT categoria sistema (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status 403', () => pm.response.to.have.status(403));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Salario custom\"\n}"
+            },
+            "url": "{{baseUrl}}/categorias/salario"
+          }
+        },
+        {
+          "name": "DELETE categoria",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/categorias/{{categoriaId}}",
+            "description": "Transações dessa categoria passam para outros."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Anexos",
+      "item": [
+        {
+          "name": "GET anexo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/anexos/{{anexoId}}",
+            "description": "JWT. 404 se não existir ou não for do usuário. Rode POST transacao com anexo antes."
           }
         }
       ]

@@ -4,6 +4,8 @@ import * as bcrypt from 'bcrypt';
 import { readFile } from 'fs/promises';
 import { Model } from 'mongoose';
 import { join } from 'path';
+import { Anexo, AnexoDocument } from '../anexos/schemas/anexo.schema';
+import { createId } from '../common/ids';
 import { Profile, ProfileDocument } from '../profiles/schemas/profile.schema';
 import {
   Transacao,
@@ -18,6 +20,12 @@ interface SeedUsuario {
   senha: string;
 }
 
+interface SeedAnexo {
+  nome: string;
+  mimeType: string;
+  dataUrl: string;
+}
+
 interface SeedTransacao {
   id: string;
   usuarioId: string;
@@ -27,7 +35,8 @@ interface SeedTransacao {
   hora?: string;
   descricao: string;
   categoria: string;
-  anexo?: { nome: string; mimeType: string; dataUrl: string } | null;
+  formaPagamento?: string | null;
+  anexo?: SeedAnexo | null;
 }
 
 interface SeedProfile {
@@ -42,6 +51,12 @@ interface SeedFile {
   profiles: SeedProfile[];
 }
 
+type AnexoEmbutido = {
+  nome?: string;
+  mimeType?: string;
+  dataUrl?: string;
+};
+
 @Injectable()
 export class SeedService implements OnModuleInit {
   private readonly logger = new Logger(SeedService.name);
@@ -51,6 +66,8 @@ export class SeedService implements OnModuleInit {
     private readonly usuarioModel: Model<UsuarioDocument>,
     @InjectModel(Transacao.name)
     private readonly transacaoModel: Model<TransacaoDocument>,
+    @InjectModel(Anexo.name)
+    private readonly anexoModel: Model<AnexoDocument>,
     @InjectModel(Profile.name)
     private readonly profileModel: Model<ProfileDocument>,
   ) {}
@@ -86,8 +103,30 @@ export class SeedService implements OnModuleInit {
       (await this.transacaoModel.countDocuments()) === 0 &&
       data.transacoes?.length
     ) {
-      await this.transacaoModel.insertMany(
-        data.transacoes.map((transacao) => ({
+      const anexos: Array<{
+        id: string;
+        transacaoId: string;
+        usuarioId: string;
+        nome: string;
+        mimeType: string;
+        dataUrl: string;
+      }> = [];
+
+      const transacoes = data.transacoes.map((transacao) => {
+        const anexo = transacao.anexo ?? null;
+        let anexoId: string | null = null;
+        if (anexo) {
+          anexoId = createId();
+          anexos.push({
+            id: anexoId,
+            transacaoId: transacao.id,
+            usuarioId: transacao.usuarioId,
+            nome: anexo.nome,
+            mimeType: anexo.mimeType,
+            dataUrl: anexo.dataUrl,
+          });
+        }
+        return {
           id: transacao.id,
           usuarioId: transacao.usuarioId,
           tipo: transacao.tipo,
@@ -96,10 +135,19 @@ export class SeedService implements OnModuleInit {
           hora: transacao.hora ?? '00:00:00',
           descricao: transacao.descricao,
           categoria: transacao.categoria,
-          anexo: transacao.anexo ?? null,
-        })),
+          formaPagamento: transacao.formaPagamento ?? null,
+          anexoId,
+        };
+      });
+
+      await this.transacaoModel.insertMany(transacoes);
+      if (anexos.length > 0) {
+        await this.anexoModel.insertMany(anexos);
+      }
+      this.logger.log(
+        `Seed: ${transacoes.length} transações` +
+          (anexos.length ? `, ${anexos.length} anexos` : ''),
       );
-      this.logger.log(`Seed: ${data.transacoes.length} transações`);
     }
 
     if (data && (await this.profileModel.countDocuments()) === 0 && data.profiles?.length) {
@@ -107,14 +155,92 @@ export class SeedService implements OnModuleInit {
       this.logger.log(`Seed: ${data.profiles.length} profiles`);
     }
 
-    const backfill = await this.transacaoModel.updateMany(
+    const horaBackfill = await this.transacaoModel.updateMany(
       { $or: [{ hora: { $exists: false } }, { hora: null }, { hora: '' }] },
       { $set: { hora: '00:00:00' } },
     );
-    if (backfill.modifiedCount > 0) {
+    if (horaBackfill.modifiedCount > 0) {
       this.logger.log(
-        `Seed: ${backfill.modifiedCount} transações receberam hora 00:00:00`,
+        `Seed: ${horaBackfill.modifiedCount} transações receberam hora 00:00:00`,
       );
+    }
+
+    await this.migrarAnexosEmbutidos();
+
+    const formaBackfill = await this.transacaoModel.updateMany(
+      { formaPagamento: { $exists: false } },
+      { $set: { formaPagamento: null } },
+    );
+    if (formaBackfill.modifiedCount > 0) {
+      this.logger.log(
+        `Seed: ${formaBackfill.modifiedCount} transações receberam formaPagamento null`,
+      );
+    }
+
+    const anexoIdBackfill = await this.transacaoModel.updateMany(
+      { anexoId: { $exists: false } },
+      { $set: { anexoId: null } },
+    );
+    if (anexoIdBackfill.modifiedCount > 0) {
+      this.logger.log(
+        `Seed: ${anexoIdBackfill.modifiedCount} transações receberam anexoId null`,
+      );
+    }
+  }
+
+  private async migrarAnexosEmbutidos(): Promise<void> {
+    const legado = this.transacaoModel.collection.find({
+      anexo: { $exists: true, $type: 'object' },
+    });
+
+    let migrados = 0;
+    for await (const doc of legado) {
+      const anexo = doc.anexo as AnexoEmbutido | null;
+      const transacaoId = String(doc.id ?? '');
+      const usuarioId = String(doc.usuarioId ?? '');
+
+      if (!anexo?.dataUrl || !transacaoId) {
+        await this.transacaoModel.collection.updateOne(
+          { _id: doc._id },
+          { $unset: { anexo: 1 }, $set: { anexoId: null } },
+        );
+        continue;
+      }
+
+      const existente = await this.anexoModel
+        .findOne({ transacaoId })
+        .exec();
+      const anexoId = existente?.id ?? createId();
+      if (!existente) {
+        await this.anexoModel.create({
+          id: anexoId,
+          transacaoId,
+          usuarioId,
+          nome: anexo.nome ?? 'anexo',
+          mimeType: anexo.mimeType ?? 'application/octet-stream',
+          dataUrl: anexo.dataUrl,
+        });
+      }
+
+      await this.transacaoModel.collection.updateOne(
+        { _id: doc._id },
+        { $set: { anexoId }, $unset: { anexo: 1 } },
+      );
+      migrados += 1;
+    }
+
+    const unset = await this.transacaoModel.collection.updateMany(
+      { anexo: { $exists: true } },
+      { $unset: { anexo: 1 } },
+    );
+    if (unset.modifiedCount > 0) {
+      this.logger.log(
+        `Seed: campo anexo removido de ${unset.modifiedCount} transações`,
+      );
+    }
+
+    if (migrados > 0) {
+      this.logger.log(`Seed: ${migrados} anexos migrados para a collection anexos`);
     }
   }
 }

@@ -8,14 +8,8 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import {
-  CATEGORIAS_TRANSACAO,
-  TIPOS_TRANSACAO,
-} from '../transacao.constants';
-import type {
-  CategoriaTransacao,
-  TipoTransacao,
-} from '../transacao.constants';
+import { FORMAS_PAGAMENTO, TIPOS_TRANSACAO } from '../transacao.constants';
+import type { FormaPagamento, TipoTransacao } from '../transacao.constants';
 
 function emptyToUndefined({ value }: { value: unknown }) {
   if (value === '' || value === null || value === undefined) return undefined;
@@ -58,8 +52,13 @@ export class ListTransacoesQuery {
 
   @IsOptional()
   @Transform(emptyToUndefined)
-  @IsIn(CATEGORIAS_TRANSACAO)
-  categoria?: CategoriaTransacao;
+  @IsString()
+  categoria?: string;
+
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsIn(FORMAS_PAGAMENTO)
+  formaPagamento?: FormaPagamento;
 
   @IsOptional()
   @Transform(emptyToUndefined)

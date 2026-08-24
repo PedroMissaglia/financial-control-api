@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { AnexosModule } from '../anexos/anexos.module';
+import { CategoriasModule } from '../categorias/categorias.module';
 import { Transacao, TransacaoSchema } from './schemas/transacao.schema';
 import { TransacoesController } from './transacoes.controller';
 import { TransacoesService } from './transacoes.service';
@@ -9,6 +11,8 @@ import { TransacoesService } from './transacoes.service';
     MongooseModule.forFeature([
       { name: Transacao.name, schema: TransacaoSchema },
     ]),
+    CategoriasModule,
+    AnexosModule,
   ],
   controllers: [TransacoesController],
   providers: [TransacoesService],

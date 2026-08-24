@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { Anexo, AnexoSchema } from '../anexos/schemas/anexo.schema';
 import { Profile, ProfileSchema } from '../profiles/schemas/profile.schema';
 import {
   Transacao,
@@ -13,6 +14,7 @@ import { SeedService } from './seed.service';
     MongooseModule.forFeature([
       { name: Usuario.name, schema: UsuarioSchema },
       { name: Transacao.name, schema: TransacaoSchema },
+      { name: Anexo.name, schema: AnexoSchema },
       { name: Profile.name, schema: ProfileSchema },
     ]),
   ],

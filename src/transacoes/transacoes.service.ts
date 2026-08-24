@@ -1,16 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { AnexosService } from '../anexos/anexos.service';
+import { CategoriasService } from '../categorias/categorias.service';
 import { createId } from '../common/ids';
 import { CreateTransacaoDto } from './dto/create-transacao.dto';
 import { ListTransacoesQuery } from './dto/list-transacoes.query';
 import { Transacao, TransacaoDocument } from './schemas/transacao.schema';
-import type { CategoriaTransacao, TipoTransacao } from './transacao.constants';
+import type { FormaPagamento, TipoTransacao } from './transacao.constants';
 
 type TransacaoFiltro = {
   usuarioId?: string;
   tipo?: TipoTransacao;
-  categoria?: CategoriaTransacao;
+  categoria?: string;
+  formaPagamento?: FormaPagamento;
   descricao?: { $regex: string; $options: string };
   data?: { $gte?: string; $lte?: string };
   valor?: { $gte?: number; $lte?: number };
@@ -33,6 +36,8 @@ export class TransacoesService {
   constructor(
     @InjectModel(Transacao.name)
     private readonly transacaoModel: Model<TransacaoDocument>,
+    private readonly categoriasService: CategoriasService,
+    private readonly anexosService: AnexosService,
   ) {}
 
   async findAll(query: ListTransacoesQuery): Promise<TransacoesPage> {
@@ -80,15 +85,59 @@ export class TransacoesService {
   }
 
   async create(dto: CreateTransacaoDto): Promise<unknown> {
+    await this.assertCategoriaValida(dto.usuarioId, dto.categoria);
+
+    const id = createId();
+    let anexoId: string | null = null;
+    if (dto.anexo) {
+      const anexo = await this.anexosService.createForTransacao({
+        transacaoId: id,
+        usuarioId: dto.usuarioId,
+        nome: dto.anexo.nome,
+        mimeType: dto.anexo.mimeType,
+        dataUrl: dto.anexo.dataUrl,
+      });
+      anexoId = anexo.id;
+    }
+
     const criada = await this.transacaoModel.create({
-      ...dto,
-      id: createId(),
-      anexo: dto.anexo ?? null,
+      id,
+      usuarioId: dto.usuarioId,
+      tipo: dto.tipo,
+      valor: dto.valor,
+      data: dto.data,
+      hora: dto.hora,
+      descricao: dto.descricao,
+      categoria: dto.categoria,
+      formaPagamento: dto.formaPagamento ?? null,
+      anexoId,
     });
     return criada.toJSON();
   }
 
   async update(id: string, dto: CreateTransacaoDto): Promise<unknown> {
+    await this.assertCategoriaValida(dto.usuarioId, dto.categoria);
+
+    const existente = await this.transacaoModel.findOne({ id }).exec();
+    if (!existente) {
+      throw new NotFoundException('Transação não encontrada');
+    }
+
+    let anexoId = existente.anexoId ?? null;
+    if (dto.anexo === null) {
+      await this.anexosService.removeByTransacaoId(id);
+      anexoId = null;
+    } else if (dto.anexo) {
+      const anexo = await this.anexosService.upsertForTransacao({
+        transacaoId: id,
+        usuarioId: dto.usuarioId,
+        nome: dto.anexo.nome,
+        mimeType: dto.anexo.mimeType,
+        dataUrl: dto.anexo.dataUrl,
+      });
+      anexoId = anexo.id;
+    }
+
     const atualizada = await this.transacaoModel
       .findOneAndUpdate(
         { id },
@@ -100,7 +149,8 @@ export class TransacoesService {
           hora: dto.hora,
           descricao: dto.descricao,
           categoria: dto.categoria,
-          anexo: dto.anexo ?? null,
+          formaPagamento: dto.formaPagamento ?? null,
+          anexoId,
         },
         { new: true },
       )
@@ -118,7 +168,21 @@ export class TransacoesService {
     if (!resultado) {
       throw new NotFoundException('Transação não encontrada');
     }
+    await this.anexosService.removeByTransacaoId(id);
     return {};
+  }
+
+  private async assertCategoriaValida(
+    usuarioId: string,
+    categoria: string,
+  ): Promise<void> {
+    const valida = await this.categoriasService.isValidForUsuario(
+      usuarioId,
+      categoria,
+    );
+    if (!valida) {
+      throw new BadRequestException('Categoria inválida');
+    }
   }
 
   private montarFiltro(query: ListTransacoesQuery): TransacaoFiltro {
@@ -139,6 +203,10 @@ export class TransacoesService {
 
     if (query.categoria) {
       filtro.categoria = query.categoria;
+    }
+
+    if (query.formaPagamento) {
+      filtro.formaPagamento = query.formaPagamento;
     }
 
     if (query.dataInicio || query.dataFim) {
