@@ -12,6 +12,7 @@
     { "key": "transacaoId", "value": "1" },
     { "key": "categoriaId", "value": "" },
     { "key": "anexoId", "value": "" },
+    { "key": "gastoMensalId", "value": "" },
     { "key": "profileId", "value": "1" }
   ],
   "auth": {
@@ -568,6 +569,138 @@
             "header": [],
             "url": "{{baseUrl}}/anexos/{{anexoId}}",
             "description": "JWT. 404 se não existir ou não for do usuário. Rode POST transacao com anexo antes."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Gastos mensais",
+      "item": [
+        {
+          "name": "GET gastos mensais",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('lista', () => pm.expect(json).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gastos-mensais?usuarioId={{usuarioId}}&competencia=2026-02",
+            "description": "usuarioId obrigatório. competencia YYYY-MM; omitida = mês UTC corrente."
+          }
+        },
+        {
+          "name": "POST gasto mensal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.id) pm.collectionVariables.set('gastoMensalId', json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": \"{{usuarioId}}\",\n  \"titulo\": \"Aluguel\",\n  \"descricao\": \"Apt 12\",\n  \"diaVencimento\": 31,\n  \"valor\": 1500,\n  \"categoria\": \"moradia\",\n  \"formaPagamento\": \"pix\"\n}"
+            },
+            "url": "{{baseUrl}}/gastos-mensais"
+          }
+        },
+        {
+          "name": "PUT gasto mensal",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Aluguel\",\n  \"descricao\": \"Apt 12\",\n  \"diaVencimento\": 10,\n  \"valor\": 1600,\n  \"categoria\": \"moradia\",\n  \"formaPagamento\": \"pix\"\n}"
+            },
+            "url": "{{baseUrl}}/gastos-mensais/{{gastoMensalId}}",
+            "description": "Não altera pagamentos nem transações já lançadas."
+          }
+        },
+        {
+          "name": "POST pagar competencia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.transacaoId) pm.collectionVariables.set('transacaoId', json.transacaoId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"competencia\": \"2026-02\"\n}"
+            },
+            "url": "{{baseUrl}}/gastos-mensais/{{gastoMensalId}}/pagamentos",
+            "description": "Cria transação tipo pagamento. dia 31 em fev → data 2026-02-28."
+          }
+        },
+        {
+          "name": "POST pagar competencia (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status 409', () => pm.response.to.have.status(409));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"competencia\": \"2026-02\"\n}"
+            },
+            "url": "{{baseUrl}}/gastos-mensais/{{gastoMensalId}}/pagamentos"
+          }
+        },
+        {
+          "name": "DELETE desmarcar pagamento",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/gastos-mensais/{{gastoMensalId}}/pagamentos?competencia=2026-02",
+            "description": "Apaga a transação lançada. GET /transacoes/:id deve voltar 404."
+          }
+        },
+        {
+          "name": "DELETE gasto mensal",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/gastos-mensais/{{gastoMensalId}}",
+            "description": "Apaga pagamentos do template. Não apaga transações históricas."
           }
         }
       ]

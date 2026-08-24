@@ -5,6 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AnexosModule } from './anexos/anexos.module';
 import { AuthModule } from './auth/auth.module';
 import { CategoriasModule } from './categorias/categorias.module';
+import { GastosMensaisModule } from './gastos-mensais/gastos-mensais.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { ProfilesModule } from './profiles/profiles.module';
 import { SeedModule } from './seed/seed.module';
@@ -26,6 +27,7 @@ import { AppController } from './app.controller';
     TransacoesModule,
     CategoriasModule,
     AnexosModule,
+    GastosMensaisModule,
     ProfilesModule,
     SeedModule,
   ],
