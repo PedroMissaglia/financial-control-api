@@ -35,16 +35,23 @@ export class ProfilesController {
   }
 
   @Put(':id')
-  update(
+  async update(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: CreateProfileDto,
   ) {
-    if (id !== user.id) {
+    if (id === user.id) {
+      return this.profilesService.update(id, dto);
+    }
+
+    await this.contasConjuntasService.assertCanAccess(user.id, id);
+
+    if (typeof dto.blocoNotas !== 'string') {
       throw new ForbiddenException(
-        'O perfil do cônjuge é só leitura (layout, tema e metas editáveis são pessoais)',
+        'No perfil do cônjuge só é possível atualizar o bloco de notas',
       );
     }
-    return this.profilesService.update(id, dto);
+
+    return this.profilesService.updateBlocoNotas(id, dto.blocoNotas);
   }
 }

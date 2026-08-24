@@ -35,4 +35,16 @@ export class ProfilesService {
 
     return atualizado.toJSON();
   }
+
+  async updateBlocoNotas(id: string, blocoNotas: string): Promise<unknown> {
+    const atualizado = await this.profileModel
+      .findOneAndUpdate({ id }, { $set: { blocoNotas } }, { new: true })
+      .exec();
+
+    if (!atualizado) {
+      throw new NotFoundException('Profile não encontrado');
+    }
+
+    return atualizado.toJSON();
+  }
 }

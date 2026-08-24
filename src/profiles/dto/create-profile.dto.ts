@@ -7,6 +7,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -104,6 +105,11 @@ export class CreateProfileDto {
   @Type(() => Number)
   @IsNumber()
   extratoLimite?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100000)
+  blocoNotas?: string;
 
   @IsOptional()
   @IsArray()
