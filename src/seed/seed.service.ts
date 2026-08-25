@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { readFile } from 'fs/promises';
@@ -70,9 +71,57 @@ export class SeedService implements OnModuleInit {
     private readonly anexoModel: Model<AnexoDocument>,
     @InjectModel(Profile.name)
     private readonly profileModel: Model<ProfileDocument>,
+    private readonly config: ConfigService,
   ) {}
 
+  private seedOnBoot(): boolean {
+    const raw = this.config.get<string>('SEED_ON_BOOT')?.trim().toLowerCase();
+    return raw === 'true' || raw === '1';
+  }
+
   async onModuleInit(): Promise<void> {
+    if (this.seedOnBoot()) {
+      await this.seedFromFile();
+    } else {
+      this.logger.log(
+        'Seed de data/db.json ignorado (SEED_ON_BOOT não está ativo)',
+      );
+    }
+
+    const horaBackfill = await this.transacaoModel.updateMany(
+      { $or: [{ hora: { $exists: false } }, { hora: null }, { hora: '' }] },
+      { $set: { hora: '00:00:00' } },
+    );
+    if (horaBackfill.modifiedCount > 0) {
+      this.logger.log(
+        `Seed: ${horaBackfill.modifiedCount} transações receberam hora 00:00:00`,
+      );
+    }
+
+    await this.migrarAnexosEmbutidos();
+
+    const formaBackfill = await this.transacaoModel.updateMany(
+      { formaPagamento: { $exists: false } },
+      { $set: { formaPagamento: null } },
+    );
+    if (formaBackfill.modifiedCount > 0) {
+      this.logger.log(
+        `Seed: ${formaBackfill.modifiedCount} transações receberam formaPagamento null`,
+      );
+    }
+
+    const anexoIdBackfill = await this.transacaoModel.updateMany(
+      { anexoId: { $exists: false } },
+      { $set: { anexoId: null } },
+    );
+    if (anexoIdBackfill.modifiedCount > 0) {
+      this.logger.log(
+        `Seed: ${anexoIdBackfill.modifiedCount} transações receberam anexoId null`,
+      );
+    }
+  }
+
+  private async seedFromFile(): Promise<void> {
     const seedPath = join(process.cwd(), 'data', 'db.json');
     let data: SeedFile | null = null;
 
@@ -83,9 +132,14 @@ export class SeedService implements OnModuleInit {
       this.logger.warn(
         `Seed ignorado: não foi possível ler ${seedPath} (${String(error)})`,
       );
+      return;
     }
 
-    if (data && (await this.usuarioModel.countDocuments()) === 0 && data.usuarios?.length) {
+    if (
+      data &&
+      (await this.usuarioModel.countDocuments()) === 0 &&
+      data.usuarios?.length
+    ) {
       const usuarios = await Promise.all(
         data.usuarios.map(async (usuario) => ({
           id: usuario.id,
@@ -150,41 +204,13 @@ export class SeedService implements OnModuleInit {
       );
     }
 
-    if (data && (await this.profileModel.countDocuments()) === 0 && data.profiles?.length) {
+    if (
+      data &&
+      (await this.profileModel.countDocuments()) === 0 &&
+      data.profiles?.length
+    ) {
       await this.profileModel.insertMany(data.profiles);
       this.logger.log(`Seed: ${data.profiles.length} profiles`);
-    }
-
-    const horaBackfill = await this.transacaoModel.updateMany(
-      { $or: [{ hora: { $exists: false } }, { hora: null }, { hora: '' }] },
-      { $set: { hora: '00:00:00' } },
-    );
-    if (horaBackfill.modifiedCount > 0) {
-      this.logger.log(
-        `Seed: ${horaBackfill.modifiedCount} transações receberam hora 00:00:00`,
-      );
-    }
-
-    await this.migrarAnexosEmbutidos();
-
-    const formaBackfill = await this.transacaoModel.updateMany(
-      { formaPagamento: { $exists: false } },
-      { $set: { formaPagamento: null } },
-    );
-    if (formaBackfill.modifiedCount > 0) {
-      this.logger.log(
-        `Seed: ${formaBackfill.modifiedCount} transações receberam formaPagamento null`,
-      );
-    }
-
-    const anexoIdBackfill = await this.transacaoModel.updateMany(
-      { anexoId: { $exists: false } },
-      { $set: { anexoId: null } },
-    );
-    if (anexoIdBackfill.modifiedCount > 0) {
-      this.logger.log(
-        `Seed: ${anexoIdBackfill.modifiedCount} transações receberam anexoId null`,
-      );
     }
   }
 

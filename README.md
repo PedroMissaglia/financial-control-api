@@ -23,7 +23,7 @@ Ou com Docker:
 docker compose up --build
 ```
 
-API em `http://localhost:3001`. Seed automático do `data/db.json` se as collections estiverem vazias.
+API em `http://localhost:3001`. Seed do `data/db.json` só com `SEED_ON_BOOT=true` (ou `1`) e collections vazias. Sem a flag, a base permanece vazia após um wipe.
 
 ## Auth
 
@@ -33,7 +33,7 @@ API em `http://localhost:3001`. Seed automático do `data/db.json` se as collect
 
 Rotas protegidas: `Authorization: Bearer <accessToken>`.
 
-Usuários de seed: `pedro.missaglia@gmail.com` / `123456` e `John@fincontrol.com` / `fincontrol`.
+Usuários de seed (opcionais, só com `SEED_ON_BOOT=true`): `pedro.missaglia@gmail.com` / `123456` e `John@fincontrol.com` / `fincontrol`.
 
 ## Conta conjunta
 
