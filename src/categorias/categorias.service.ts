@@ -41,10 +41,10 @@ export class CategoriasService {
 
   async isValidForUsuario(usuarioId: string, categoria: string): Promise<boolean> {
     if (this.isSistemaId(categoria)) return true;
-    const custom = await this.categoriaModel
-      .findOne({ id: categoria, usuarioId })
-      .exec();
-    return custom != null;
+    const custom = await this.categoriaModel.findOne({ id: categoria }).exec();
+    if (!custom) return false;
+    const escopo = await this.contasConjuntasService.getEscopoUsuarioIds(usuarioId);
+    return escopo.includes(custom.usuarioId);
   }
 
   async findAll(usuarioIds: string[]): Promise<CategoriaDto[]> {
@@ -100,9 +100,12 @@ export class CategoriasService {
   async remove(id: string, user: AuthUser): Promise<Record<string, never>> {
     const doc = await this.getCustomOwned(id, user);
 
+    const escopo = await this.contasConjuntasService.getEscopoUsuarioIds(
+      doc.usuarioId,
+    );
     await this.transacaoModel
       .updateMany(
-        { usuarioId: doc.usuarioId, categoria: id },
+        { usuarioId: { $in: escopo }, categoria: id },
         { $set: { categoria: CATEGORIA_OUTROS } },
       )
       .exec();
@@ -143,7 +146,10 @@ export class CategoriasService {
     nome: string,
     exceptId?: string,
   ): Promise<void> {
-    const existentes = await this.categoriaModel.find({ usuarioId }).exec();
+    const escopo = await this.contasConjuntasService.getEscopoUsuarioIds(usuarioId);
+    const existentes = await this.categoriaModel
+      .find({ usuarioId: { $in: escopo } })
+      .exec();
     const normalized = nome.toLowerCase();
     const duplicada = existentes.some(
       (item) => item.id !== exceptId && item.nome.trim().toLowerCase() === normalized,

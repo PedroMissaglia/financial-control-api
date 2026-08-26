@@ -159,6 +159,11 @@ export class ContasConjuntasService {
     return doc.convidanteId === actorId ? doc.convidadoId : doc.convidanteId;
   }
 
+  async getEscopoUsuarioIds(usuarioId: string): Promise<string[]> {
+    const parceiroId = await this.getParceiroId(usuarioId);
+    return parceiroId ? [usuarioId, parceiroId] : [usuarioId];
+  }
+
   private async findForUser(
     usuarioId: string,
   ): Promise<ContaConjuntaDocument | null> {
